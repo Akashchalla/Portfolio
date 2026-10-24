@@ -1,82 +1,84 @@
-// Mobile Navigation Toggle
-const hamburger = document.getElementById('hamburger');
-const navMenu = document.getElementById('navMenu');
+// A pointer-based sketch playground inspired by the featured Smart Board article.
+// The camera-based browser recreation is separate, in camera-demo.js.
+const canvas = document.querySelector('#drawing');
+const context = canvas.getContext('2d');
+const board = document.querySelector('#board');
+const statusLabel = document.querySelector('#board-status');
+let mode = 'draw';
+let activePointer = null;
+let previous = null;
 
-if (hamburger && navMenu) {
-    hamburger.addEventListener('click', () => {
-        navMenu.classList.toggle('active');
-        hamburger.classList.toggle('active');
-    });
-
-    // Close mobile menu when clicking on a link
-    document.querySelectorAll('.nav-menu a').forEach(link => {
-        link.addEventListener('click', () => {
-            navMenu.classList.remove('active');
-            hamburger.classList.remove('active');
-        });
-    });
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.round(rect.width * ratio);
+  const height = Math.round(rect.height * ratio);
+  if (canvas.width === width && canvas.height === height) return;
+  const saved = document.createElement('canvas');
+  saved.width = canvas.width;
+  saved.height = canvas.height;
+  saved.getContext('2d').drawImage(canvas, 0, 0);
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(saved, 0, 0, width, height);
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
 }
+new ResizeObserver(resizeCanvas).observe(canvas);
 
-// Smooth Scroll for Navigation Links
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-            const offsetTop = target.offsetTop - 80;
-            window.scrollTo({
-                top: offsetTop,
-                behavior: 'smooth'
-            });
-        }
-    });
+function point(event) {
+  const rect = canvas.getBoundingClientRect();
+  return {x: event.clientX - rect.left, y: event.clientY - rect.top};
+}
+function stroke(from, to) {
+  context.globalCompositeOperation = mode === 'erase' ? 'destination-out' : 'source-over';
+  context.strokeStyle = '#dcf592';
+  context.lineWidth = mode === 'erase' ? 28 : 3;
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.beginPath();
+  context.moveTo(from.x, from.y);
+  context.lineTo(to.x, to.y);
+  context.stroke();
+}
+canvas.addEventListener('pointerdown', event => {
+  if (event.button !== 0 || activePointer !== null) return;
+  activePointer = event.pointerId;
+  canvas.setPointerCapture(event.pointerId);
+  previous = point(event);
+  board.classList.add('started');
+  stroke(previous, {x: previous.x + .1, y: previous.y + .1});
+  statusLabel.textContent = mode === 'draw' ? 'Your idea, in motion.' : 'Erase your strokes';
 });
-
-// Active Navigation Link on Scroll
-window.addEventListener('scroll', () => {
-    const sections = document.querySelectorAll('section');
-    const navLinks = document.querySelectorAll('.nav-menu a');
-    
-    let current = '';
-    
-    sections.forEach(section => {
-        const sectionTop = section.offsetTop;
-        if (window.pageYOffset >= sectionTop - 200) {
-            current = section.getAttribute('id');
-        }
-    });
-    
-    navLinks.forEach(link => {
-        link.style.color = '';
-        if (link.getAttribute('href') === `#${current}`) {
-            link.style.color = 'var(--accent-color)';
-        }
-    });
+canvas.addEventListener('pointermove', event => {
+  if (event.pointerId !== activePointer) return;
+  const next = point(event);
+  stroke(previous, next);
+  previous = next;
 });
-
-// Add hover effect to cards
-document.querySelectorAll('.project-card, .education-card, .contact-card, .stat-box').forEach(card => {
-    card.addEventListener('mouseenter', function() {
-        this.style.boxShadow = '0 10px 40px rgba(0, 217, 255, 0.2)';
+function endStroke(event) {
+  if (event.pointerId !== activePointer) return;
+  activePointer = null;
+  previous = null;
+}
+canvas.addEventListener('pointerup', endStroke);
+canvas.addEventListener('pointercancel', endStroke);
+canvas.addEventListener('lostpointercapture', endStroke);
+document.querySelectorAll('[data-tool]').forEach(button => {
+  button.addEventListener('click', () => {
+    mode = button.dataset.tool;
+    document.querySelectorAll('[data-tool]').forEach(tool => {
+      const selected = tool === button;
+      tool.classList.toggle('active', selected);
+      tool.setAttribute('aria-pressed', String(selected));
     });
-    
-    card.addEventListener('mouseleave', function() {
-        this.style.boxShadow = 'none';
-    });
+    statusLabel.textContent = mode === 'draw' ? 'Try drawing here ↗' : 'Drag over your strokes';
+  });
 });
-
-// Navbar background change on scroll
-window.addEventListener('scroll', () => {
-    const navbar = document.querySelector('.navbar');
-    if (navbar) {
-        if (window.scrollY > 50) {
-            navbar.style.background = 'rgba(10, 15, 28, 1)';
-        } else {
-            navbar.style.background = 'rgba(10, 15, 28, 0.95)';
-        }
-    }
+document.querySelector('#clear-board').addEventListener('click', () => {
+  context.save();
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.restore();
+  board.classList.remove('started');
+  statusLabel.textContent = 'A fresh start.';
 });
-
-// Console Message
-console.log('%c👋 Welcome to my portfolio!', 'color: #00d9ff; font-size: 20px; font-weight: bold;');
-console.log('%cLike what you see? Let\'s connect!', 'color: #8b9bb3; font-size: 14px;');
